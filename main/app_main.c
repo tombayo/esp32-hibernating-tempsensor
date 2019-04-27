@@ -128,7 +128,7 @@ static void http_post_data(char *post_data) {
 
   esp_http_client_set_post_field(client, post_data, strlen(post_data));
 
-  err = esp_http_client_perform(client);
+  esp_err_t err = esp_http_client_perform(client);
   if (err == ESP_OK) {
     ESP_LOGI(HTTPTAG, "HTTP POST Status = %d, content_length = %d",
               esp_http_client_get_status_code(client),
@@ -165,7 +165,7 @@ static void _wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t 
     ESP_LOGI(WIFITAG,"connect to the AP fail");
   } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
     ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-    ESP_LOGI(WIFIAG, "got ip:%s", ip4addr_ntoa(&event->ip_info.ip));
+    ESP_LOGI(WIFITAG, "got ip:%s", ip4addr_ntoa(&event->ip_info.ip));
     s_retry_num = 0;
     xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 
