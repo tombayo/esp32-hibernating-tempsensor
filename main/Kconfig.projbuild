@@ -1,4 +1,4 @@
-menu "Wifi Hibernate Config"
+menu "Hibernating Tempsensor Config"
 
     config ESP_WIFI_SSID
         string "WiFi SSID"
@@ -23,4 +23,22 @@ menu "Wifi Hibernate Config"
         default 60
         help
             Set how long the ESP32 will sleep for, before waking up.
+    
+    config HTTP_URL
+        string "HTTP Url"
+        default "http://httpbin.org/post"
+        help
+            The default URL to post data to.
+
+    config ONE_WIRE_GPIO
+        int "OneWire GPIO number"
+        range 0 34
+        default 5
+        help
+            GPIO number (IOxx) to access One Wire Bus.
+
+            Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used.
+
+            GPIOs 35-39 are input-only so cannot be used to drive the One Wire Bus.
+
 endmenu
