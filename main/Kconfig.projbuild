@@ -29,7 +29,19 @@ menu "Hibernating Tempsensor Config"
         default "http://httpbin.org/post"
         help
             The default URL to post data to.
+    
+    config HOSTNAME
+        string "Hostname"
+        default "tombaE32x1"
+        help
+            The hostname of this ESP32.
 
+    config SERVERPW
+        string "Server Password"
+        default "asdqwe123"
+        help
+            The password to gain access to posting data to the server.
+    
     config ONE_WIRE_GPIO
         int "OneWire GPIO number"
         range 0 34

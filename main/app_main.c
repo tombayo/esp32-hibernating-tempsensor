@@ -50,22 +50,22 @@ static const char *HTTPTAG = "HTTP_CLIENT";
 #define MAX_HTTP_RECV_BUFFER 512
 #define HTTP_POST_URL CONFIG_HTTP_URL
 
+#define HOSTNAME CONFIG_HOSTNAME
+#define SERVERPW CONFIG_SERVERPW
+
 static const char *SLEEPTAG = "SLEEP_WAKEUP";
 #define WAKEUP_TIMEOUT  CONFIG_WAKEUP_TIMEOUT
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
 static const char *TEMPTAG = "1W_TEMPSENSOR";
+             char TEMPDATA[] = "\0";
 #define GPIO_DS18B20_0      CONFIG_ONE_WIRE_GPIO
 #define MAX_DEVICES         8
 #define DS18B20_RESOLUTION  DS18B20_RESOLUTION_12_BIT
 #define SAMPLE_PERIOD       1000 // ms
 
 
-
 static void read_temperature_sensor() {
- 
-  // Stable readings require a brief period before communication
-  vTaskDelay(2000.0 / portTICK_PERIOD_MS);
 
   // Create a 1-Wire bus, using the RMT timeslot driver
   OneWireBus *owb;
@@ -90,44 +90,6 @@ static void read_temperature_sensor() {
   }
   ESP_LOGI(TEMPTAG, "Found %d device%s\n", num_devices, num_devices == 1 ? "" : "s");
 
-  // In this example, if a single device is present, then the ROM code is probably
-  // not very interesting, so just print it out. If there are multiple devices,
-  // then it may be useful to check that a specific device is present.
-
-  if (num_devices == 1) {
-    // For a single device only:
-    OneWireBus_ROMCode rom_code;
-    owb_status status = owb_read_rom(owb, &rom_code);
-    if (status == OWB_STATUS_OK) {
-      char rom_code_s[OWB_ROM_CODE_STRING_LENGTH];
-      owb_string_from_rom_code(rom_code, rom_code_s, sizeof(rom_code_s));
-      ESP_LOGI(TEMPTAG, "Single device %s present\n", rom_code_s);
-    }
-    else {
-      ESP_LOGI(TEMPTAG, "An error occurred reading ROM code: %d", status);
-    }
-  }
-  else {
-    // Search for a known ROM code (LSB first):
-    // For example: 0x1502162ca5b2ee28
-    OneWireBus_ROMCode known_device = {
-      .fields.family = { 0x28 },
-      .fields.serial_number = { 0xee, 0xb2, 0xa5, 0x2c, 0x16, 0x02 },
-      .fields.crc = { 0x15 },
-    };
-    char rom_code_s[OWB_ROM_CODE_STRING_LENGTH];
-    owb_string_from_rom_code(known_device, rom_code_s, sizeof(rom_code_s));
-    bool is_present = false;
-
-    owb_status search_status = owb_verify_rom(owb, known_device, &is_present);
-    if (search_status == OWB_STATUS_OK) {
-      ESP_LOGI(TEMPTAG, "Device %s is %s\n", rom_code_s, is_present ? "present" : "not present");
-    }
-    else {
-      ESP_LOGI(TEMPTAG, "An error occurred searching for known device: %d", search_status);
-    }
-  }
-
   // Create DS18B20 devices on the 1-Wire bus
   DS18B20_Info * devices[MAX_DEVICES] = {0};
   for (int i = 0; i < num_devices; ++i) {
@@ -149,38 +111,36 @@ static void read_temperature_sensor() {
   int errors_count[MAX_DEVICES] = {0};
   int sample_count = 0;
   if (num_devices > 0) {
-    TickType_t last_wake_time = xTaskGetTickCount();
+    ds18b20_convert_all(owb);
 
-    while (1) {
-      last_wake_time = xTaskGetTickCount();
+    // In this application all devices use the same resolution,
+    // so use the first device to determine the delay
+    ds18b20_wait_for_conversion(devices[0]);
 
-      ds18b20_convert_all(owb);
+    // Read the results immediately after conversion otherwise it may fail
+    // (using printf before reading may take too long)
+    float readings[MAX_DEVICES] = { 0 };
+    DS18B20_ERROR errors[MAX_DEVICES] = { 0 };
 
-      // In this application all devices use the same resolution,
-      // so use the first device to determine the delay
-      ds18b20_wait_for_conversion(devices[0]);
-
-      // Read the results immediately after conversion otherwise it may fail
-      // (using printf before reading may take too long)
-      float readings[MAX_DEVICES] = { 0 };
-      DS18B20_ERROR errors[MAX_DEVICES] = { 0 };
-
-      for (int i = 0; i < num_devices; ++i) {
-        errors[i] = ds18b20_read_temp(devices[i], &readings[i]);
-      }
-
-      // Print results in a separate loop, after all have been read
-      ESP_LOGI(TEMPTAG, "\nTemperature readings (degrees C): sample %d\n", ++sample_count);
-      for (int i = 0; i < num_devices; ++i) {
-        if (errors[i] != DS18B20_OK) {
-          ++errors_count[i];
-        }
-
-        ESP_LOGI(TEMPTAG, "  %d: %.1f    %d errors\n", i, readings[i], errors_count[i]);
-      }
-
-      vTaskDelayUntil(&last_wake_time, SAMPLE_PERIOD / portTICK_PERIOD_MS);
+    for (int i = 0; i < num_devices; ++i) {
+      errors[i] = ds18b20_read_temp(devices[i], &readings[i]);
     }
+
+    // Print results in a separate loop, after all have been read
+    ESP_LOGI(TEMPTAG, "\nTemperature readings (degrees C): sample %d\n", ++sample_count);
+    for (int i = 0; i < num_devices; ++i) {
+      if (errors[i] != DS18B20_OK) {
+        ++errors_count[i];
+      } else {
+        char buffer[32];
+        sprintf(buffer, "%.1f", readings[i]);
+        strcat(TEMPDATA, "&temperature=");
+        strcat(TEMPDATA, buffer);
+      }
+
+      ESP_LOGI(TEMPTAG, "  %d: %.1f    %d errors\n", i, readings[i], errors_count[i]);
+    }
+
   }
 
   // clean up dynamically allocated data
@@ -268,12 +228,24 @@ static void http_post_data(char *post_data) {
 
 /**
  * Called when Wifi and IP-address is OK.
+ * 
+ * This is the function to put online tasks into.
  * */
 static void connected_task(void *pvParameters) {
 
+  char fielddata[] = "\0";
 
+  read_temperature_sensor(); // Read temperature data
 
-  http_post_data("field1=value1&field2=value2");
+  // Build our data-string:
+  strcat(fielddata, "hostname=");
+  strcat(fielddata, HOSTNAME);
+  strcat(fielddata, "&password=");
+  strcat(fielddata, SERVERPW);
+  strcat(fielddata, HTTPPOSTDATA);
+
+  ESP_LOGI(HTTPTAG, "Posting data: %s", fielddata);
+  http_post_data(fielddata);
 
   vTaskDelete(NULL);
 
@@ -364,7 +336,5 @@ void app_main() {
   }
   ESP_ERROR_CHECK(ret);
 
-  read_temperature_sensor();
-  
-  //wifi_init_sta(); // Runs connected_task() once everything is up an running
+  wifi_init_sta(); // Runs connected_task() once everything is up an running
 }
