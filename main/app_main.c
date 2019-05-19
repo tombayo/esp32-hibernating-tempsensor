@@ -58,12 +58,20 @@ static const char *SLEEPTAG = "SLEEP_WAKEUP";
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
 static const char *TEMPTAG = "1W_TEMPSENSOR";
-             char TEMPDATA[] = "\0";
+             char TEMPDATA[] = "";
 #define GPIO_DS18B20_0      CONFIG_ONE_WIRE_GPIO
 #define MAX_DEVICES         8
 #define DS18B20_RESOLUTION  DS18B20_RESOLUTION_12_BIT
 #define SAMPLE_PERIOD       1000 // ms
 
+char* LastcharDel(char* name) {
+  int i = 0;
+  while(name[i] != '\0') {
+    i++;
+  }
+  name[i-1] = '\0';
+  return name;
+}
 
 static void read_temperature_sensor() {
 
@@ -133,8 +141,7 @@ static void read_temperature_sensor() {
         ++errors_count[i];
       } else {
         char buffer[32];
-        sprintf(buffer, "%.1f", readings[i]);
-        strcat(TEMPDATA, "&temperature=");
+        snprintf(buffer, sizeof(buffer), "\"%.1f\",", readings[i]);
         strcat(TEMPDATA, buffer);
       }
 
@@ -156,10 +163,10 @@ static void read_temperature_sensor() {
  * */
 static void hibernate() {
   const int wakeup_time_sec = WAKEUP_TIMEOUT;
-  printf("Enabling timer wakeup, %ds\n", wakeup_time_sec);
+  ESP_LOGI(SLEEPTAG, "Enabling timer wakeup, %ds.", wakeup_time_sec);
   esp_sleep_enable_timer_wakeup(wakeup_time_sec * 1000000);
 
-  printf("Entering deep sleep\n");
+  ESP_LOGI(SLEEPTAG, "Entering deep sleep.");
   gettimeofday(&sleep_enter_time, NULL);
 
   esp_deep_sleep_start();
@@ -213,6 +220,7 @@ static void http_post_data(char *post_data) {
   esp_http_client_handle_t client = esp_http_client_init(&config);
 
   esp_http_client_set_post_field(client, post_data, strlen(post_data));
+  esp_http_client_set_header(client, "Content-Type", "application/json");
 
   esp_err_t err = esp_http_client_perform(client);
   if (err == ESP_OK) {
@@ -233,23 +241,25 @@ static void http_post_data(char *post_data) {
  * */
 static void connected_task(void *pvParameters) {
 
-  char fielddata[] = "\0";
-
   read_temperature_sensor(); // Read temperature data
 
-  // Build our data-string:
-  strcat(fielddata, "hostname=");
-  strcat(fielddata, HOSTNAME);
-  strcat(fielddata, "&password=");
-  strcat(fielddata, SERVERPW);
-  strcat(fielddata, TEMPDATA);
+  ESP_LOGI("DEBUG", "Current value from tempsensor: %s", TEMPDATA);
 
-  ESP_LOGI(HTTPTAG, "Posting data: %s", fielddata);
+  // Build our data-string:
+  char buffer[1024];
+  snprintf(buffer, sizeof(buffer),
+    "{\"hostname\":\"%s\",\"password\":\"%s\",\"temperature\":[%s]}",
+    HOSTNAME,
+    SERVERPW,
+    LastcharDel(TEMPDATA)
+  );
+
+  ESP_LOGI(HTTPTAG, "Posting data: %s", buffer);
   http_post_data(fielddata);
 
-  vTaskDelete(NULL);
-
   hibernate();
+
+  vTaskDelete(NULL);
 }
 
 /**
@@ -337,4 +347,6 @@ void app_main() {
   ESP_ERROR_CHECK(ret);
 
   wifi_init_sta(); // Runs connected_task() once everything is up an running
+
+  ESP_LOGI("DEBUG", "End of Script?");
 }
