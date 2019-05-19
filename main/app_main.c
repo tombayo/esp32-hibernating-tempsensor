@@ -242,7 +242,7 @@ static void connected_task(void *pvParameters) {
   strcat(fielddata, HOSTNAME);
   strcat(fielddata, "&password=");
   strcat(fielddata, SERVERPW);
-  strcat(fielddata, HTTPPOSTDATA);
+  strcat(fielddata, TEMPDATA);
 
   ESP_LOGI(HTTPTAG, "Posting data: %s", fielddata);
   http_post_data(fielddata);
