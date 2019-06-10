@@ -256,7 +256,7 @@ static void connected_task(void *pvParameters) {
   );
 
   ESP_LOGI(HTTPTAG, "Posting data: %s", buffer);
-  http_post_data(fielddata);
+  http_post_data(buffer);
 
   hibernate();
 
