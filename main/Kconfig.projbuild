@@ -52,5 +52,16 @@ menu "Hibernating Tempsensor Config"
             Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used.
 
             GPIOs 35-39 are input-only so cannot be used to drive the One Wire Bus.
+    
+    config POWER_1W_GPIO
+        int "1W Power GPIO number"
+        range 0 34
+        default 9
+        help
+            GPIO number (IOxx) to power the One Wire Bus.
+
+            Some GPIOs are used for other purposes (flash connections, etc.) and cannot be used.
+
+            GPIOs 35-39 are input-only so cannot be used to drive the One Wire Bus.
 
 endmenu

@@ -60,6 +60,7 @@ static RTC_DATA_ATTR struct timeval sleep_enter_time;
 static const char *TEMPTAG = "1W_TEMPSENSOR";
              char TEMPDATA[] = "";
 #define GPIO_DS18B20_0      CONFIG_ONE_WIRE_GPIO
+#define GPIO_DS18B20_PWR    CONFIG_POWER_1W_GPIO
 #define MAX_DEVICES         8
 #define DS18B20_RESOLUTION  DS18B20_RESOLUTION_12_BIT
 #define SAMPLE_PERIOD       1000 // ms
@@ -339,12 +340,16 @@ static void report_wakeup_status() {
 void app_main() {
   report_wakeup_status();
 
+  /* Possibly unessesary:
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
     ret = nvs_flash_init();
   }
   ESP_ERROR_CHECK(ret);
+  */
+  rtc_gpio_set_direction(GPIO_DS18B20_PWR, RTC_GPIO_MODE_OUTPUT_ONLY); // Sets the GPIO to output
+  rtc_gpio_set_level(GPIO_DS18B20_PWR, 1); // Turns on the GPIO to power the 1W-bus
 
   wifi_init_sta(); // Runs connected_task() once everything is up an running
 
