@@ -350,7 +350,7 @@ void app_main() {
   ESP_ERROR_CHECK(ret);
 
 
-  //gpio_set_direction(GPIO_DS18B20_PWR, GPIO_MODE_OUTPUT); // Sets the GPIO to output
+  gpio_set_direction(GPIO_DS18B20_PWR, GPIO_MODE_OUTPUT); // Sets the GPIO to output
   gpio_set_level(GPIO_DS18B20_PWR, 1); // Turns on the GPIO to power the 1W-bus
 
   wifi_init_sta(); // Runs connected_task() once everything is up an running
