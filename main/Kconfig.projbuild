@@ -56,7 +56,7 @@ menu "Hibernating Tempsensor Config"
     config POWER_1W_GPIO
         int "1W Power GPIO number"
         range 0 34
-        default 9
+        default 18
         help
             GPIO number (IOxx) to power the One Wire Bus.
 
